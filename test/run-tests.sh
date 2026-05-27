@@ -2369,6 +2369,11 @@ assert_eq "Codex fork --last" "--full-auto" \
 assert_eq "Codex resume --all --include-non-interactive" "" \
 	"$(extract_cli_args "codex" "codex resume --all --include-non-interactive")"
 
+# Known limitation: if an option value equals a subcommand name (e.g.
+# `codex --profile fork`), the value is incorrectly stripped because we
+# cannot distinguish option values from subcommands without a full option
+# schema. This is extremely unlikely in practice (P3).
+
 # --- Test 9c: dynamic discovery sanity check ---
 # Verifies _discover_session_flags actually finds flags from --help.
 # Catches regressions in the help-parsing logic itself.

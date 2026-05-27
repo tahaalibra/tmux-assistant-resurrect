@@ -375,9 +375,46 @@ _strip_bool_opt() {
 	echo "$2" | sed -E "s/(^| )$1( |$)/ /g"
 }
 
-# Strip a positional subcommand + optional value: cmd [val]
-_strip_subcmd() {
-	echo "$2" | sed -E "s/(^| )$1( +[^- ][^ ]*)?( |$)/ /g"
+# Strip known subcommands from args (e.g. "resume <id>" or "fork <id>").
+# Usage: _strip_subcmds "args" subcmd1 subcmd2 ...
+#
+# Scans args left-to-right, skipping dash-prefixed tokens. Each non-dash
+# token is checked against the list of known subcommands. If it matches,
+# the token and an optional following positional value (non-dash) are
+# removed and scanning continues (to handle args that may have multiple
+# subcommand-like tokens). If a non-dash token does NOT match any known
+# subcommand, it is left in place and scanning stops — it belongs to the
+# tool's own positional arguments.
+_strip_subcmds() {
+	local -a words=($1)
+	shift
+	local -a targets=("$@")
+	local i=0 n=${#words[@]}
+	while [ "$i" -lt "$n" ]; do
+		case "${words[$i]}" in
+		-*) i=$((i + 1)) ;;
+		*)
+			local matched=0 t
+			for t in "${targets[@]}"; do
+				if [ "${words[$i]}" = "$t" ]; then
+					matched=1
+					unset 'words[i]'
+					local nxt=$((i + 1))
+					if [ "$nxt" -lt "$n" ]; then
+						case "${words[$nxt]}" in
+						-*) ;;
+						*) unset 'words[nxt]'; i=$((i + 1)) ;;
+						esac
+					fi
+					break
+				fi
+			done
+			[ "$matched" = "0" ] && break
+			i=$((i + 1))
+			;;
+		esac
+	done
+	echo "${words[*]}"
 }
 
 # Discover session-identity flags from a tool's --help output.
@@ -495,16 +532,17 @@ extract_cli_args() {
 	fi
 
 	if [ -n "$subcmd_pattern" ]; then
-		local subcmd help_out matched=0
+		local subcmd help_out
+		local -a confirmed_subcmds=()
 		help_out=$("$tool" --help 2>/dev/null) || true
 		for subcmd in $(echo "$subcmd_pattern" | tr '|' ' '); do
 			if [ -z "$help_out" ] || echo "$help_out" | grep -qw "$subcmd"; then
-				args=$(_strip_subcmd "$subcmd" "$args")
-				matched=1
+				confirmed_subcmds+=("$subcmd")
 			fi
 		done
-		# Strip subcommand-specific picker flags (e.g. codex resume --last)
-		if [ "$matched" = "1" ]; then
+		if [ "${#confirmed_subcmds[@]}" -gt 0 ]; then
+			args=$(_strip_subcmds "$args" "${confirmed_subcmds[@]}")
+			# Strip subcommand-specific picker flags (e.g. codex resume --last)
 			local subcmd_flags_var="SESSION_SUBCMD_FLAGS_${tool}"
 			local subcmd_flags="${!subcmd_flags_var:-}"
 			local flag

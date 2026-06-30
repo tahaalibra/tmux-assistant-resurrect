@@ -1419,6 +1419,7 @@ emit_session() {
 	opencode) session_id=$(get_opencode_session "$cpid" "$cargs" "$cwd" "$allow_opencode_db") ;;
 	codex) session_id=$(get_codex_session "$cpid" "$cargs" "$cwd") ;;
 	pi) session_id=$(get_pi_session "$cpid" "$cargs" "$cwd") ;;
+	omp) session_id=$(get_omp_session "$cpid" "$cargs" "$cwd" "") ;;
 	esac
 
 	if [ -n "$session_id" ]; then
@@ -1456,6 +1457,7 @@ emit_session() {
 		case "$tool" in
 		codex) register_codex_session_id "$session_id" ;;
 		pi) register_pi_session_id "$session_id" ;;
+		omp) register_omp_session_id "$session_id" ;;
 		esac
 		return 0
 	else

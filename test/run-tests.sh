@@ -1317,6 +1317,36 @@ else
 fi
 USED_PI_SESSION_IDS=""
 
+# --- _arg_value: flag parsing + glob safety ---
+assert_eq "_arg_value long flag with space" "val1" "$(_arg_value "omp --resume val1" --resume)"
+assert_eq "_arg_value long flag with equals" "val2" "$(_arg_value "omp --resume=val2" --resume)"
+assert_eq "_arg_value short flag" "val3" "$(_arg_value "omp -r val3" --resume -r)"
+assert_eq "_arg_value missing flag is empty" "" "$(_arg_value "omp --model opus" --resume)"
+assert_eq "_arg_value flag followed by another flag is empty" "" "$(_arg_value "omp --resume --model" --resume)"
+
+# Regression: a value containing a glob char must be returned verbatim, not
+# expanded against the cwd. Run inside a dir holding files the glob matches, so
+# unguarded word-splitting would resolve to a filename instead of the literal.
+# Only the space-separated form exercises this — in `--cwd=PAT` the glob carries
+# the `--cwd=` prefix, matches nothing, and stays literal even when buggy.
+ARG_GLOB_DIR=$(mktemp -d)
+touch "$ARG_GLOB_DIR/ZZZ_match_a" "$ARG_GLOB_DIR/ZZZ_match_b"
+(
+	cd "$ARG_GLOB_DIR"
+	assert_eq "_arg_value does not glob-expand a '*' value" "*" "$(_arg_value "omp --cwd *" --cwd)"
+	assert_eq "_arg_value does not glob-expand a '?' value" "ZZZ_match_?" "$(_arg_value "omp --cwd ZZZ_match_?" --cwd)"
+
+	# _arg_value must not clobber a caller that already has noglob enabled.
+	set -f
+	_arg_value "omp --resume val" --resume >/dev/null
+	case $- in
+	*f*) pass "_arg_value preserves caller's noglob state" ;;
+	*) fail "_arg_value re-enabled globbing for a noglob caller" ;;
+	esac
+	set +f
+)
+rm -rf "$ARG_GLOB_DIR"
+
 # --- OMP: resume args + session-file lookup ---
 assert_eq "OMP --resume extraction" "019e99omp_resume" "$(get_omp_session 99999 "omp --resume 019e99omp_resume" "/tmp/omp-project" "")"
 assert_eq "OMP --resume=id extraction" "019e99omp_resume_eq" "$(get_omp_session 99999 "omp --resume=019e99omp_resume_eq" "/tmp/omp-project" "")"

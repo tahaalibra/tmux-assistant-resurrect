@@ -354,7 +354,16 @@ PY
 _arg_value() {
 	local args="$1"
 	shift
-	local -a words=($args)
+	# Disable pathname expansion while splitting: an argv value containing a
+	# glob char (e.g. `--cwd '*'`) would otherwise expand against the cwd and
+	# resolve the wrong session directory. Preserve the caller's noglob state
+	# so we never re-enable globbing for a caller that had it off.
+	local -a words
+	local _had_noglob=0
+	case $- in *f*) _had_noglob=1 ;; esac
+	set -f
+	words=($args)
+	[ "$_had_noglob" = 1 ] || set +f
 	local i n word flag next
 	n=${#words[@]}
 	for ((i = 0; i < n; i++)); do
